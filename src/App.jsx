@@ -52,6 +52,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/sso" element={<SSO />} />
+      <Route path="/sso/sso" element={<SSO />} />
       <Route
         path="/"
         element={
