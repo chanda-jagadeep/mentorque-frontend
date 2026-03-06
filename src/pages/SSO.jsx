@@ -55,14 +55,41 @@ export default function SSO() {
         JSON.stringify({ email: displayEmail, role: resolvedRole })
       );
     } catch (_) {}
-    const t = setTimeout(() => {
-      if (resolvedRole === "ADMIN") window.location.href = "/admin";
-      else if (resolvedRole === "MENTOR") window.location.href = "/mentor";
-      else if (resolvedRole === "USER") window.location.href = "/availability";
-      else window.location.href = "/welcome";
-    }, 2200);
-    return () => clearTimeout(t);
-  }, [token, resolvedRole, userId, email]);
+
+    let cancelled = false;
+    const HEALTH_URL = `${import.meta.env.VITE_API_URL || ""}/health`;
+    const MAX_WAIT = 60000; // 60 seconds max
+    const INTERVAL = 2000; // ping every 2 seconds
+    const start = Date.now();
+
+    async function waitForBackendAndRedirect() {
+      while (!cancelled && Date.now() - start < MAX_WAIT) {
+        try {
+          const res = await fetch(HEALTH_URL);
+          if (res.ok) {
+            if (!cancelled) {
+              if (resolvedRole === "ADMIN") window.location.href = "/admin";
+              else if (resolvedRole === "MENTOR") window.location.href = "/mentor";
+              else window.location.href = "/availability";
+            }
+            return;
+          }
+        } catch (_) {}
+        await new Promise((r) => setTimeout(r, INTERVAL));
+      }
+      // If backend never woke up, redirect anyway
+      if (!cancelled) {
+        if (resolvedRole === "ADMIN") window.location.href = "/admin";
+        else if (resolvedRole === "MENTOR") window.location.href = "/mentor";
+        else window.location.href = "/availability";
+      }
+    }
+
+    waitForBackendAndRedirect();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, resolvedRole, userId, email, displayEmail]);
 
   if (!token) {
     return null;
@@ -94,11 +121,11 @@ export default function SSO() {
       </div>
       <style>{`
         .sso-progress-bar {
-          animation: sso-shrink 2.2s linear forwards;
+          animation: sso-pulse 1.5s ease-in-out infinite;
         }
-        @keyframes sso-shrink {
-          from { width: 100%; }
-          to { width: 0%; }
+        @keyframes sso-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
         }
       `}</style>
     </div>
