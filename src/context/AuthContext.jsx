@@ -36,14 +36,6 @@ export function AuthProvider({ children }) {
         storage.setItem("userEmail", u.email);
       }
     } catch (err) {
-      if (err?.status === 401) {
-        for (const key of ["token", "userRole", "userId", "userEmail", "role", "user"]) {
-          sessionStorage.removeItem(key);
-          localStorage.removeItem(key);
-        }
-        setUser(null);
-        return;
-      }
       const ssoToken = storage.getItem("token");
       const ssoRole = storage.getItem("userRole");
       const ssoUserId = storage.getItem("userId");
@@ -55,7 +47,10 @@ export function AuthProvider({ children }) {
           email: storage.getItem("userEmail") || "",
         });
       } else {
-        storage.removeItem("token");
+        for (const key of ["token", "userRole", "userId", "userEmail", "role", "user"]) {
+          sessionStorage.removeItem(key);
+          localStorage.removeItem(key);
+        }
         setUser(null);
       }
     } finally {

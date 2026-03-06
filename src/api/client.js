@@ -40,7 +40,9 @@ export async function api(method, path, body, options = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) {
-      clearAuthAndRedirectToWelcome(true);
+      if (!options.skipAuthRedirect) {
+        clearAuthAndRedirectToWelcome(true);
+      }
       const err = new Error("Session expired");
       err.status = 401;
       throw err;

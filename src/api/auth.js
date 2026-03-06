@@ -1,4 +1,4 @@
-import { get, post } from "./client.js";
+import { api, get, post } from "./client.js";
 
 export async function register(data) {
   return post("/api/auth/register", data);
@@ -9,7 +9,7 @@ export async function login(data) {
 }
 
 export async function me() {
-  return get("/api/auth/me");
+  return api("GET", "/api/auth/me", null, { skipAuthRedirect: true });
 }
 
 export async function getGoogleAuthUrl() {
