@@ -65,7 +65,8 @@ export default function Availability() {
 
   const isSlotDisabled = (dateStr, hour) => {
     if (isPastDate(dateStr)) return true;
-    if (dateStr === new Date().toISOString().slice(0, 10)) {
+    const utcTodayStr = new Date().toISOString().slice(0, 10);
+    if (dateStr === utcTodayStr) {
       const { startTime } = slotToUTC(dateStr, hour);
       return isPastDateTime(startTime);
     }

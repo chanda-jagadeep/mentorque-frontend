@@ -71,17 +71,20 @@ export function formatSlotLabel(startISO, endISO, timezone) {
   return formatTimeRange(`${start} – ${end}`);
 }
 
-/** Check if date (YYYY-MM-DD) is in the past (UTC) */
+/**
+ * Check if date (YYYY-MM-DD) is in the past.
+ * Both dateStr and "today" are compared as UTC calendar dates so timezone
+ * offset cannot make tomorrow appear as past (e.g. 11:30 PM IST March 15
+ * is still March 15 UTC; March 16 UTC is never past).
+ */
 export function isPastDate(dateStr) {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  const d = new Date(dateStr + "T00:00:00Z");
-  return d < today;
+  const utcTodayStr = new Date().toISOString().slice(0, 10);
+  return dateStr < utcTodayStr;
 }
 
-/** Check if datetime is in the past */
+/** Check if datetime (UTC ISO string) is in the past */
 export function isPastDateTime(isoString) {
-  return new Date(isoString) <= new Date();
+  return new Date(isoString).getTime() <= Date.now();
 }
 
 /** Get start of week (Monday) for a date, in UTC date string YYYY-MM-DD */
