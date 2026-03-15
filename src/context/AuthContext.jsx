@@ -20,34 +20,20 @@ export function AuthProvider({ children }) {
     const userId = storage.getItem("userId");
     const email = storage.getItem("userEmail");
 
-    if (token && role && userId) {
-      setUser({ token, role, id: userId, email: email || "" });
-    }
-
     if (!token) {
       setUser(null);
       setLoading(false);
       return;
     }
+
     try {
       const { user: u } = await authApi.me();
       setUser(u);
-      if (u?.email) {
-        storage.setItem("userEmail", u.email);
-      }
+      if (u?.email) storage.setItem("userEmail", u.email);
     } catch (err) {
-      console.error("[AuthContext] /me failed:", err?.status, err?.message, err);
-      const ssoToken = storage.getItem("token");
-      const ssoRole = storage.getItem("userRole");
-      const ssoUserId = storage.getItem("userId");
-      console.log("[AuthContext] Storage check:", { ssoToken: !!ssoToken, ssoRole, ssoUserId });
-      if (ssoToken && ssoRole && ssoUserId) {
-        setUser({
-          token: ssoToken,
-          role: ssoRole,
-          id: ssoUserId,
-          email: storage.getItem("userEmail") || "",
-        });
+      console.warn("[AuthContext] /me failed:", err?.message);
+      if (token && role && userId) {
+        setUser({ token, role, id: userId, email: email || "" });
       } else {
         for (const key of ["token", "userRole", "userId", "userEmail", "role", "user"]) {
           sessionStorage.removeItem(key);
