@@ -8,7 +8,6 @@ import {
   formatDateLocal,
   formatSlotLabel,
   formatTimeRange,
-  formatTo12Hour,
   isPastDateTime,
 } from "../utils/time";
 import AddUserModal from "../components/AddUserModal";
@@ -19,16 +18,12 @@ const TIMEZONE_OPTIONS = [
   { value: "IST", label: "IST (GMT+5:30)" },
 ];
 
-const TIME_OPTIONS_30MIN = Array.from({ length: 48 }, (_, i) => {
-  const totalMinutes = i * 30;
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  const hh = String(h).padStart(2, "0");
-  const mm = String(m).padStart(2, "0");
-  const value = `${hh}:${mm}`;
-  const label = formatTo12Hour(value);
-  return { value, label };
-});
+const SCHEDULE_HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const SCHEDULE_MINUTE_OPTIONS = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+const SCHEDULE_AMPM_OPTIONS = ["AM", "PM"];
+
+const scheduleTimeSelectClass =
+  "min-w-0 flex-1 box-border rounded-lg bg-slate-950 border border-slate-800 text-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none";
 
 export default function AdminDashboard() {
   const { user: authUser } = useAuth();
@@ -50,8 +45,14 @@ export default function AdminDashboard() {
   const [loadingMentorAvail, setLoadingMentorAvail] = useState(false);
   const [meetings, setMeetings] = useState([]);
   const [scheduleTitle, setScheduleTitle] = useState("");
-  const [scheduleStart, setScheduleStart] = useState("");
-  const [scheduleEnd, setScheduleEnd] = useState("");
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleStartHour, setScheduleStartHour] = useState("");
+  const [scheduleStartMinute, setScheduleStartMinute] = useState("");
+  const [scheduleStartAmPm, setScheduleStartAmPm] = useState("");
+  const [scheduleEndHour, setScheduleEndHour] = useState("");
+  const [scheduleEndMinute, setScheduleEndMinute] = useState("");
+  const [scheduleEndAmPm, setScheduleEndAmPm] = useState("");
+  const [scheduleInlineError, setScheduleInlineError] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [mentorEmail, setMentorEmail] = useState("");
   const [additionalEmails, setAdditionalEmails] = useState([""]);
@@ -170,20 +171,74 @@ export default function AdminDashboard() {
     if (selectedMentor) setMentorEmail(selectedMentor.email);
   }, [selectedMentor]);
 
+  const to24From12 = useCallback((hourStr, minuteStr, amPm) => {
+    if (!hourStr || !minuteStr || !amPm) return null;
+    let h = parseInt(hourStr, 10);
+    if (Number.isNaN(h)) return null;
+    const ap = amPm.toUpperCase();
+    if (ap === "AM") {
+      if (h === 12) h = 0;
+    } else if (ap === "PM") {
+      if (h !== 12) h += 12;
+    } else return null;
+    return `${String(h).padStart(2, "0")}:${minuteStr}`;
+  }, []);
+
+  const hm24To12Parts = useCallback((hm24) => {
+    if (!hm24 || !/^\d{1,2}:\d{2}$/.test(hm24)) return { hour: "", minute: "", amPm: "" };
+    const [hs, ms] = hm24.split(":");
+    let h = parseInt(hs, 10);
+    const minute = ms.padStart(2, "0");
+    if (Number.isNaN(h)) return { hour: "", minute: "", amPm: "" };
+    let amPm = "AM";
+    if (h === 0) {
+      h = 12;
+    } else if (h === 12) {
+      amPm = "PM";
+    } else if (h > 12) {
+      h -= 12;
+      amPm = "PM";
+    }
+    return { hour: String(h), minute, amPm };
+  }, []);
+
+  const meetingZone = displayTimezone === "IST" ? "Asia/Kolkata" : "UTC";
+
+  const scheduleStartDt = useMemo(() => {
+    const hm = to24From12(scheduleStartHour, scheduleStartMinute, scheduleStartAmPm);
+    if (!scheduleDate || !hm) return null;
+    const dt = DateTime.fromFormat(`${scheduleDate} ${hm}`, "yyyy-MM-dd HH:mm", { zone: meetingZone });
+    return dt.isValid ? dt : null;
+  }, [scheduleDate, scheduleStartHour, scheduleStartMinute, scheduleStartAmPm, meetingZone, to24From12]);
+
+  const scheduleEndDt = useMemo(() => {
+    const hm = to24From12(scheduleEndHour, scheduleEndMinute, scheduleEndAmPm);
+    if (!scheduleDate || !hm) return null;
+    const dt = DateTime.fromFormat(`${scheduleDate} ${hm}`, "yyyy-MM-dd HH:mm", { zone: meetingZone });
+    return dt.isValid ? dt : null;
+  }, [scheduleDate, scheduleEndHour, scheduleEndMinute, scheduleEndAmPm, meetingZone, to24From12]);
+
+  const scheduleStartIso = scheduleStartDt?.toISO() ?? "";
+  const scheduleEndIso = scheduleEndDt?.toISO() ?? "";
+
   const checkOverlap = useCallback(async () => {
-    if (!availabilityTarget || !scheduleStart || !scheduleEnd) return;
+    if (!availabilityTarget || !scheduleStartIso || !scheduleEndIso) return;
     try {
-      const slots = await adminApi.getOverlappingSlots(availabilityTarget.id, scheduleStart, scheduleEnd);
+      const slots = await adminApi.getOverlappingSlots(
+        availabilityTarget.id,
+        scheduleStartIso,
+        scheduleEndIso
+      );
       setOverlapSlots(slots);
     } catch {
       setOverlapSlots([]);
     }
-  }, [availabilityTarget, scheduleStart, scheduleEnd]);
+  }, [availabilityTarget, scheduleStartIso, scheduleEndIso]);
 
   useEffect(() => {
-    if (scheduleStart && scheduleEnd && availabilityTarget?.id) checkOverlap();
+    if (scheduleStartIso && scheduleEndIso && availabilityTarget?.id) checkOverlap();
     else setOverlapSlots([]);
-  }, [scheduleStart, scheduleEnd, availabilityTarget?.id, checkOverlap]);
+  }, [scheduleStartIso, scheduleEndIso, availabilityTarget?.id, checkOverlap]);
 
   const getParticipantEmails = () => {
     const list = [userEmail.trim(), mentorEmail.trim(), ...additionalEmails.map((e) => e.trim())].filter(Boolean);
@@ -192,27 +247,41 @@ export default function AdminDashboard() {
 
   const handleScheduleMeeting = async (e) => {
     e.preventDefault();
-    setError("");
+    setScheduleInlineError("");
     setSuccess("");
-    if (!scheduleTitle.trim() || !scheduleStart || !scheduleEnd) {
-      setError("Meeting name, date and time are required.");
+    if (!scheduleTitle.trim()) {
+      setScheduleInlineError("Meeting name is required.");
       return;
     }
-    if (new Date(scheduleStart) >= new Date(scheduleEnd)) {
-      setError("End time must be after start time.");
+    if (!scheduleDate) {
+      setScheduleInlineError("Please select a date.");
       return;
     }
-    if (isPastDateTime(scheduleStart)) {
-      setError("Cannot schedule in the past.");
+    if (!scheduleStartHour || !scheduleStartMinute || !scheduleStartAmPm) {
+      setScheduleInlineError("Please select a complete start time");
+      return;
+    }
+    if (!scheduleEndHour || !scheduleEndMinute || !scheduleEndAmPm) {
+      setScheduleInlineError("Please select a complete end time");
+      return;
+    }
+    if (!scheduleStartDt || !scheduleEndDt) {
+      setScheduleInlineError("Invalid date or time.");
+      return;
+    }
+    if (scheduleEndDt.toMillis() <= scheduleStartDt.toMillis()) {
+      setScheduleInlineError("End time must be after start time");
+      return;
+    }
+    if (isPastDateTime(scheduleStartIso)) {
+      setScheduleInlineError("Cannot schedule in the past.");
       return;
     }
     setLoading(true);
     try {
-      const dateStr = scheduleStart ? scheduleStart.slice(0, 10) : "";
-      const [y, m, d] = dateStr ? dateStr.split("-") : ["", "", ""];
-      const date = dateStr ? `${d}-${m}-${y}` : "";
-      const startTime = scheduleStart ? scheduleStart.slice(11, 16) : "";
-      const endTime = scheduleEnd ? scheduleEnd.slice(11, 16) : "";
+      const date = scheduleStartDt.toFormat("dd-MM-yyyy");
+      const startTime = scheduleStartDt.toFormat("HH:mm");
+      const endTime = scheduleEndDt.toFormat("HH:mm");
       const timezone = displayTimezone === "IST" ? "Asia/Kolkata" : "UTC";
       await adminApi.scheduleMeeting({
         title: scheduleTitle.trim(),
@@ -224,15 +293,20 @@ export default function AdminDashboard() {
       });
       setSuccess("Meeting scheduled. Meet link will appear if Google is connected.");
       setScheduleTitle("");
-      setScheduleStart("");
-      setScheduleEnd("");
+      setScheduleStartHour("");
+      setScheduleStartMinute("");
+      setScheduleStartAmPm("");
+      setScheduleEndHour("");
+      setScheduleEndMinute("");
+      setScheduleEndAmPm("");
+      setScheduleInlineError("");
       setUserEmail("");
       setMentorEmail("");
       setAdditionalEmails([""]);
       setOverlapSlots([]);
       loadMeetings();
-    } catch (e) {
-      setError(e.message || "Failed to schedule meeting");
+    } catch (err) {
+      setScheduleInlineError(err.message || "Failed to schedule meeting");
     } finally {
       setLoading(false);
     }
@@ -247,32 +321,57 @@ export default function AdminDashboard() {
   useEffect(() => {
     const prevTz = prevDisplayTimezoneRef.current;
     if (prevTz === displayTimezone) return;
-    if (!scheduleStart || !scheduleEnd) {
-      prevDisplayTimezoneRef.current = displayTimezone;
-      return;
-    }
 
     const prevZone = prevTz === "IST" ? "Asia/Kolkata" : "UTC";
     const newZone = displayTimezone === "IST" ? "Asia/Kolkata" : "UTC";
 
-    const convertOne = (isoStr) => {
-      if (!isoStr) return isoStr;
-      const datePart = isoStr.slice(0, 10);
-      const timePart = isoStr.slice(11, 16); // HH:MM
-      if (!datePart || !timePart) return isoStr;
-      const dtPrev = DateTime.fromISO(`${datePart}T${timePart}`, { zone: prevZone });
-      if (!dtPrev.isValid) return isoStr;
+    const convertParts = (hour, minute, amPm) => {
+      const hm = to24From12(hour, minute, amPm);
+      if (!scheduleDate || !hm) return null;
+      const dtPrev = DateTime.fromFormat(`${scheduleDate} ${hm}`, "yyyy-MM-dd HH:mm", { zone: prevZone });
+      if (!dtPrev.isValid) return null;
       const dtNew = dtPrev.setZone(newZone);
-      const newDate = dtNew.toFormat("yyyy-MM-dd");
-      const newTime = dtNew.toFormat("HH:mm");
-      return `${newDate}T${newTime}:00.000Z`;
+      return {
+        date: dtNew.toFormat("yyyy-MM-dd"),
+        hm: dtNew.toFormat("HH:mm"),
+      };
     };
 
-    setScheduleStart((prev) => convertOne(prev));
-    setScheduleEnd((prev) => convertOne(prev));
+    const sConv = convertParts(scheduleStartHour, scheduleStartMinute, scheduleStartAmPm);
+    const eConv = convertParts(scheduleEndHour, scheduleEndMinute, scheduleEndAmPm);
+
+    if (!sConv && !eConv) {
+      prevDisplayTimezoneRef.current = displayTimezone;
+      return;
+    }
+
+    if (sConv) {
+      setScheduleDate(sConv.date);
+      const p = hm24To12Parts(sConv.hm);
+      setScheduleStartHour(p.hour);
+      setScheduleStartMinute(p.minute);
+      setScheduleStartAmPm(p.amPm);
+    }
+    if (eConv) {
+      const p = hm24To12Parts(eConv.hm);
+      setScheduleEndHour(p.hour);
+      setScheduleEndMinute(p.minute);
+      setScheduleEndAmPm(p.amPm);
+    }
 
     prevDisplayTimezoneRef.current = displayTimezone;
-  }, [displayTimezone, scheduleStart, scheduleEnd]);
+  }, [
+    displayTimezone,
+    scheduleDate,
+    scheduleStartHour,
+    scheduleStartMinute,
+    scheduleStartAmPm,
+    scheduleEndHour,
+    scheduleEndMinute,
+    scheduleEndAmPm,
+    to24From12,
+    hm24To12Parts,
+  ]);
 
   useEffect(() => {
     const deletePastMeetings = async () => {
@@ -844,12 +943,20 @@ export default function AdminDashboard() {
                                           const dateStr = key; // yyyy-MM-dd in selected timezone
                                           const labelRange = formatTimeRange(`${startHm} – ${endHm}`);
                                           const { start, end } = parse12RangeTo24(labelRange);
+                                          setScheduleDate(dateStr);
                                           if (start) {
-                                            setScheduleStart(`${dateStr}T${start}:00.000Z`);
+                                            const p = hm24To12Parts(start);
+                                            setScheduleStartHour(p.hour);
+                                            setScheduleStartMinute(p.minute);
+                                            setScheduleStartAmPm(p.amPm);
                                           }
                                           if (end) {
-                                            setScheduleEnd(`${dateStr}T${end}:00.000Z`);
+                                            const p = hm24To12Parts(end);
+                                            setScheduleEndHour(p.hour);
+                                            setScheduleEndMinute(p.minute);
+                                            setScheduleEndAmPm(p.amPm);
                                           }
+                                          setScheduleInlineError("");
 
                                           const userEmailLocal = userEmail || selectedUser?.email || "";
                                           const mentorEmailLocal = mentorEmail || selectedMentor?.email || "";
@@ -963,67 +1070,131 @@ export default function AdminDashboard() {
                 <label className="block text-sm font-medium text-slate-400 mb-1">Date</label>
                 <input
                   type="date"
-                  value={scheduleStart ? scheduleStart.slice(0, 10) : ""}
+                  value={scheduleDate}
                   onChange={(e) => {
-                    const d = e.target.value;
-                    const startT = scheduleStart ? scheduleStart.slice(11) : "09:00:00.000Z";
-                    const endT = scheduleEnd ? scheduleEnd.slice(11) : "10:00:00.000Z";
-                    setScheduleStart(`${d}T${startT}`);
-                    setScheduleEnd(`${d}T${endT}`);
+                    setScheduleDate(e.target.value);
+                    setScheduleInlineError("");
                   }}
                   className="w-full box-border rounded-lg bg-slate-950 border border-slate-800 text-white px-4 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 [color-scheme:dark]"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-1">Start time</label>
-                <select
-                  value={scheduleStart ? scheduleStart.slice(11, 16) : ""}
-                  onChange={(e) => {
-                    const t = e.target.value;
-                    if (!t) {
-                      setScheduleStart("");
-                      return;
-                    }
-                    const d =
-                      scheduleStart?.slice(0, 10) || new Date().toISOString().slice(0, 10);
-                    setScheduleStart(`${d}T${t}:00.000Z`);
-                  }}
-                  className="w-full box-border rounded-lg bg-slate-950 border border-slate-800 text-white px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select time</option>
-                  {TIME_OPTIONS_30MIN.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={scheduleStartHour}
+                    onChange={(e) => {
+                      setScheduleStartHour(e.target.value);
+                      setScheduleInlineError("");
+                    }}
+                    className={scheduleTimeSelectClass}
+                    aria-label="Start hour"
+                  >
+                    <option value="">Hour</option>
+                    {SCHEDULE_HOUR_OPTIONS.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-slate-400 shrink-0" aria-hidden>
+                    :
+                  </span>
+                  <select
+                    value={scheduleStartMinute}
+                    onChange={(e) => {
+                      setScheduleStartMinute(e.target.value);
+                      setScheduleInlineError("");
+                    }}
+                    className={scheduleTimeSelectClass}
+                    aria-label="Start minute"
+                  >
+                    <option value="">Min</option>
+                    {SCHEDULE_MINUTE_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={scheduleStartAmPm}
+                    onChange={(e) => {
+                      setScheduleStartAmPm(e.target.value);
+                      setScheduleInlineError("");
+                    }}
+                    className={scheduleTimeSelectClass}
+                    aria-label="Start AM or PM"
+                  >
+                    <option value="">AM/PM</option>
+                    {SCHEDULE_AMPM_OPTIONS.map((ap) => (
+                      <option key={ap} value={ap}>
+                        {ap}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-400 mb-1">End time</label>
-                <select
-                  value={scheduleEnd ? scheduleEnd.slice(11, 16) : ""}
-                  onChange={(e) => {
-                    const t = e.target.value;
-                    if (!t) {
-                      setScheduleEnd("");
-                      return;
-                    }
-                    const baseDate =
-                      scheduleEnd?.slice(0, 10) ||
-                      scheduleStart?.slice(0, 10) ||
-                      new Date().toISOString().slice(0, 10);
-                    setScheduleEnd(`${baseDate}T${t}:00.000Z`);
-                  }}
-                  className="w-full box-border rounded-lg bg-slate-950 border border-slate-800 text-white px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select time</option>
-                  {TIME_OPTIONS_30MIN.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={scheduleEndHour}
+                    onChange={(e) => {
+                      setScheduleEndHour(e.target.value);
+                      setScheduleInlineError("");
+                    }}
+                    className={scheduleTimeSelectClass}
+                    aria-label="End hour"
+                  >
+                    <option value="">Hour</option>
+                    {SCHEDULE_HOUR_OPTIONS.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-slate-400 shrink-0" aria-hidden>
+                    :
+                  </span>
+                  <select
+                    value={scheduleEndMinute}
+                    onChange={(e) => {
+                      setScheduleEndMinute(e.target.value);
+                      setScheduleInlineError("");
+                    }}
+                    className={scheduleTimeSelectClass}
+                    aria-label="End minute"
+                  >
+                    <option value="">Min</option>
+                    {SCHEDULE_MINUTE_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={scheduleEndAmPm}
+                    onChange={(e) => {
+                      setScheduleEndAmPm(e.target.value);
+                      setScheduleInlineError("");
+                    }}
+                    className={scheduleTimeSelectClass}
+                    aria-label="End AM or PM"
+                  >
+                    <option value="">AM/PM</option>
+                    {SCHEDULE_AMPM_OPTIONS.map((ap) => (
+                      <option key={ap} value={ap}>
+                        {ap}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
+              {scheduleInlineError && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-xs px-3 py-2">
+                  {scheduleInlineError}
+                </div>
+              )}
               {success && (
                 <div className="rounded-lg bg-emerald-900/30 border border-emerald-500/40 text-emerald-200 text-xs px-3 py-2">
                   {success}
