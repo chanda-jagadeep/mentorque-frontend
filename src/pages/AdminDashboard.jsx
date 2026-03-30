@@ -683,9 +683,6 @@ export default function AdminDashboard() {
               <label className="block text-sm font-medium text-slate-400 mb-1">User</label>
               <div className="flex gap-2">
                 <div className="relative flex-1 min-w-[260px] group">
-                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
-                    <span aria-hidden>🔍</span>
-                  </div>
                   <select
                     value={selectedUser ? selectedUser.id : ""}
                     onChange={(e) => {
@@ -697,11 +694,9 @@ export default function AdminDashboard() {
                       }
                       setSelectedUser(users.find((u) => u.id === id) || null);
                     }}
-                    className="w-full min-w-[260px] h-11 appearance-none rounded-xl bg-slate-900/80 border border-slate-800 text-white font-medium pl-9 pr-10 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition"
+                    className="w-full min-w-[260px] h-11 appearance-none rounded-xl bg-slate-900 border border-slate-800 text-white font-medium px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition shadow-sm"
                   >
-                    <option value="" className="text-slate-400 italic">
-                      Search or select user...
-                    </option>
+                    <option value="">Select user</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name} ({u.email})
@@ -738,9 +733,6 @@ export default function AdminDashboard() {
               <label className="block text-sm font-medium text-slate-400 mb-1">Mentor</label>
               <div className="flex gap-2">
                 <div className="relative flex-1 min-w-[260px] group">
-                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
-                    <span aria-hidden>🔍</span>
-                  </div>
                   <select
                     value={selectedMentor ? selectedMentor.id : ""}
                     onChange={(e) => {
@@ -752,11 +744,9 @@ export default function AdminDashboard() {
                       }
                       setSelectedMentor(mentors.find((m) => m.id === id) || null);
                     }}
-                    className="w-full min-w-[260px] h-11 appearance-none rounded-xl bg-slate-900/80 border border-slate-800 text-white font-medium pl-9 pr-10 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition"
+                    className="w-full min-w-[260px] h-11 appearance-none rounded-xl bg-slate-900 border border-slate-800 text-white font-medium px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition shadow-sm"
                   >
-                    <option value="" className="text-slate-400 italic">
-                      Search or select mentor...
-                    </option>
+                    <option value="">Select mentor</option>
                     {mentors.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name} ({m.email})
