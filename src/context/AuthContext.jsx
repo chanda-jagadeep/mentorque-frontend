@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import * as authApi from "../api/auth.js";
+import { createContext, useContext, useState, useEffect } from "react";
+import api from "../api/axios";
 
 const AuthContext = createContext(null);
 
@@ -7,82 +7,35 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const getStorage = useCallback(() => {
-    return typeof sessionStorage !== "undefined" && sessionStorage.getItem("token")
-      ? sessionStorage
-      : localStorage;
-  }, []);
-
-  const loadUser = useCallback(async () => {
-    const storage = getStorage();
-    const token = storage.getItem("token");
-    const role = storage.getItem("userRole");
-    const userId = storage.getItem("userId");
-    const email = storage.getItem("userEmail");
-
-    if (!token) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { user: u } = await authApi.me();
-      setUser(u);
-      if (u?.email) storage.setItem("userEmail", u.email);
-    } catch (err) {
-      console.warn("[AuthContext] /me failed:", err?.message);
-      if (token && role && userId) {
-        setUser({ token, role, id: userId, email: email || "" });
-      } else {
-        for (const key of ["token", "userRole", "userId", "userEmail", "role", "user"]) {
-          sessionStorage.removeItem(key);
-          localStorage.removeItem(key);
-        }
-        setUser(null);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [getStorage]);
-
   useEffect(() => {
-    loadUser();
-  }, [loadUser]);
-
-  const login = useCallback(async (email, password) => {
-    const { user: u, token } = await authApi.login({ email, password });
-    const storage = getStorage();
-    storage.setItem("token", token);
-    setUser(u);
-    return u;
-  }, [getStorage]);
-
-  const register = useCallback(async (data) => {
-    const { user: u, token } = await authApi.register(data);
-    const storage = getStorage();
-    storage.setItem("token", token);
-    setUser(u);
-    return u;
-  }, [getStorage]);
-
-  const logout = useCallback(() => {
-    for (const key of ["token", "userRole", "userId", "userEmail", "role", "user"]) {
-      sessionStorage.removeItem(key);
-      localStorage.removeItem(key);
+    const token = localStorage.getItem("token");
+    if (token) {
+      api.get("/api/auth/me")
+        .then(r => setUser(r.data))
+        .catch(() => localStorage.removeItem("token"))
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
-    setUser(null);
   }, []);
+
+  const login = async (email, password) => {
+    const { data } = await api.post("/api/auth/login", { email, password });
+    localStorage.setItem("token", data.token);
+    setUser(data.user);
+    return data.user;
+  };
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser: loadUser }}>
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-}
+export const useAuth = () => useContext(AuthContext);
